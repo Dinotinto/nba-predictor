@@ -9,6 +9,7 @@ from scipy.stats import norm
 import numpy as np
 import logging
 import os
+import joblib
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,54 +52,19 @@ teams_df = load_data()
 features = ['W', 'L', 'FG_PCT', 'FG3_PCT', 'FT_PCT', 'OREB', 'DREB', 'REB', 'AST', 'STL', 'BLK', 'TOV', 'PF', 
             'HOME', 'MIN', 'OPP_DREB', 'OPP_BLK', 'OPP_STL', 'OPP_PF']
 
-# Global model variables (initialize as None)
-model_original = None
-model_team_home = None
-model_team_away = None
+# Load pre-trained models
+logger.info("Loading pre-trained models...")
+try:
+    model_original = joblib.load('model_original.joblib')
+    model_team_home = joblib.load('model_team_home.joblib')
+    model_team_away = joblib.load('model_team_away.joblib')
+    logger.info("Models loaded successfully")
+except FileNotFoundError as e:
+    logger.error(f"Model files not found: {e}")
+    raise  # Fail fast if models aren’t present
 
-# Function to train models (called lazily)
-def train_models():
-    global model_original, model_team_home, model_team_away
-    if model_original is None:
-        logger.info("Training Original Model...")
-        X = teams_df[features]
-        y = teams_df['OVER_UNDER']
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        param_grid = {'n_estimators': [100, 300, 500], 'max_depth': [10, 20, None]}
-        grid_search_original = GridSearchCV(RandomForestClassifier(random_state=42), param_grid, cv=5, n_jobs=-1)
-        grid_search_original.fit(X_train, y_train)
-        model_original = grid_search_original.best_estimator_
-        logger.info(f"Original Model - Best params: {grid_search_original.best_params_}")
-        logger.info(f"Original Model - Accuracy: {accuracy_score(y_test, model_original.predict(X_test)):.2f}")
-
-    if model_team_home is None:
-        logger.info("Training Team-Based Model (Home)...")
-        home_df = teams_df[teams_df['MATCHUP'].str.contains('vs.')]
-        X_home = home_df[features]
-        y_home = home_df['OVER_UNDER']
-        X_home_train, X_home_test, y_home_train, y_home_test = train_test_split(X_home, y_home, test_size=0.2, random_state=42)
-        grid_search_team_home = GridSearchCV(RandomForestClassifier(random_state=42), param_grid, cv=5, n_jobs=-1)
-        grid_search_team_home.fit(X_home_train, y_home_train)
-        model_team_home = grid_search_team_home.best_estimator_
-        logger.info(f"Team-Based Model (Home) - Best params: {grid_search_team_home.best_params_}")
-        logger.info(f"Team-Based Model (Home) - Accuracy: {accuracy_score(y_home_test, model_team_home.predict(X_home_test)):.2f}")
-
-    if model_team_away is None:
-        logger.info("Training Team-Based Model (Away)...")
-        away_df = teams_df[teams_df['MATCHUP'].str.contains('@')]
-        X_away = away_df[features]
-        y_away = away_df['OVER_UNDER']
-        X_away_train, X_away_test, y_away_train, y_away_test = train_test_split(X_away, y_away, test_size=0.2, random_state=42)
-        grid_search_team_away = GridSearchCV(RandomForestClassifier(random_state=42), param_grid, cv=5, n_jobs=-1)
-        grid_search_team_away.fit(X_away_train, y_away_train)
-        model_team_away = grid_search_team_away.best_estimator_
-        logger.info(f"Team-Based Model (Away) - Best params: {grid_search_team_away.best_params_}")
-        logger.info(f"Team-Based Model (Away) - Accuracy: {accuracy_score(y_away_test, model_team_away.predict(X_away_test)):.2f}")
-
-# Prediction functions (unchanged except for model access)
+# Prediction functions (unchanged except removing train_models calls)
 def predict_over_under_original(team1, team2, date, over_under_line, line_home, line_away):
-    if model_original is None:
-        train_models()
     game_date = pd.to_datetime(date)
     recent_games_team1 = teams_df[(teams_df['team_name'] == team1) & (teams_df['GAME_DATE'] <= game_date)].sort_values('GAME_DATE', ascending=False).head(15)
     avg_pts_team1 = recent_games_team1['PTS'].mean() or teams_df[teams_df['team_name'] == team1]['PTS'].mean()
@@ -128,8 +94,6 @@ def predict_over_under_original(team1, team2, date, over_under_line, line_home, 
     return (overall_final_pred, total_avg_pts, overall_prob), (team1_raw_pred, team1_final_pred, team1_prob, avg_pts_team1), (team2_raw_pred, team2_final_pred, team2_prob, avg_pts_team2)
 
 def predict_team_over_under(team, date, team_line, is_home_team=True):
-    if model_team_home is None or model_team_away is None:
-        train_models()
     game_date = pd.to_datetime(date)
     if is_home_team:
         recent_games = teams_df[(teams_df['team_name'] == team) & (teams_df['MATCHUP'].str.contains('vs.')) & (teams_df['GAME_DATE'] <= game_date)].sort_values('GAME_DATE', ascending=False).head(15)
@@ -184,21 +148,36 @@ def predict_over_under_last_5_home_away(team_home, team_away, date, over_under_l
 def home():
     logger.info("Handling request...")
     team_names = [team['full_name'] for team in teams.get_teams()]
+    logger.info(f"Team names loaded: {len(team_names)} teams")
     if request.method == 'POST':
+        logger.info("Processing POST request")
         team1 = request.form['home_team']
         team2 = request.form['away_team']
         date = request.form['date']
         line = request.form['line']
         line_home = request.form['line_home']
         line_away = request.form['line_away']
+        logger.info(f"Form data: team1={team1}, team2={team2}, date={date}, line={line}, line_home={line_home}, line_away={line_away}")
         try:
+            logger.info("Calling predict_over_under_original")
             (overall_pred, total_pts1, overall_prob), (team1_orig_raw, team1_orig_final, team1_orig_prob, team1_avg_pts), (team2_orig_raw, team2_orig_final, team2_orig_prob, team2_avg_pts) = predict_over_under_original(team1, team2, date, line, line_home, line_away)
+            logger.info("predict_over_under_original completed")
             
+            logger.info("Calling predict_over_under_points")
             pred2, total_pts2, conf2 = predict_over_under_points(team1, team2, date, line)
-            pred3, avg_pts_home, avg_pts_away, total_pts3, conf3 = predict_over_under_last_5_home_away(team1, team2, date, line, line_home, line_away)
+            logger.info("predict_over_under_points completed")
             
+            logger.info("Calling predict_over_under_last_5_home_away")
+            pred3, avg_pts_home, avg_pts_away, total_pts3, conf3 = predict_over_under_last_5_home_away(team1, team2, date, line, line_home, line_away)
+            logger.info("predict_over_under_last_5_home_away completed")
+            
+            logger.info("Calling predict_team_over_under for home team")
             team1_team_raw, team1_team_final, team1_team_prob, team1_team_avg_pts = predict_team_over_under(team1, date, line_home, is_home_team=True)
+            logger.info("predict_team_over_under for home team completed")
+            
+            logger.info("Calling predict_team_over_under for away team")
             team2_team_raw, team2_team_final, team2_team_prob, team2_team_avg_pts = predict_team_over_under(team2, date, line_away, is_home_team=False)
+            logger.info("predict_team_over_under for away team completed")
             
             results = {
                 'original_overall': f"Original Model ({team1} vs. {team2}): {overall_pred}, Total Points: {total_pts1:.2f}, Confidence: {overall_prob:.1f}%",
@@ -211,10 +190,15 @@ def home():
             }
             logger.info("Prediction completed successfully")
         except Exception as e:
-            logger.error(f"Error during prediction: {str(e)}")
+            logger.error(f"Error during prediction: {str(e)}", exc_info=True)
             results = {'error': f"Error: {str(e)}"}
         return render_template('index.html', teams=team_names, results=results)
-    return render_template('index.html', teams=team_names, results=None)
+    logger.info("Rendering GET request")
+    try:
+        return render_template('index.html', teams=team_names, results=None)
+    except Exception as e:
+        logger.error(f"Error rendering template: {str(e)}", exc_info=True)
+        return f"Error: {str(e)}", 500
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 5000))
