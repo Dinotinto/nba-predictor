@@ -53,17 +53,23 @@ features = ['W', 'L', 'FG_PCT', 'FG3_PCT', 'FT_PCT', 'OREB', 'DREB', 'REB', 'AST
             'HOME', 'MIN', 'OPP_DREB', 'OPP_BLK', 'OPP_STL', 'OPP_PF']
 
 # Load pre-trained models
-logger.info("Loading pre-trained models...")
+logger.info("Attempting to load pre-trained models...")
 try:
     model_original = joblib.load('model_original.joblib')
+    if model_original is None:
+        raise ValueError("model_original.joblib loaded as None")
     model_team_home = joblib.load('model_team_home.joblib')
+    if model_team_home is None:
+        raise ValueError("model_team_home.joblib loaded as None")
     model_team_away = joblib.load('model_team_away.joblib')
-    logger.info("Models loaded successfully")
-except FileNotFoundError as e:
-    logger.error(f"Model files not found: {e}")
-    raise  # Fail fast if models aren’t present
+    if model_team_away is None:
+        raise ValueError("model_team_away.joblib loaded as None")
+    logger.info("Models loaded successfully: model_original, model_team_home, model_team_away")
+except Exception as e:
+    logger.error(f"Failed to load pre-trained models: {str(e)}", exc_info=True)
+    raise  # Crash at startup if models can’t load
 
-# Prediction functions (unchanged except removing train_models calls)
+# Prediction functions (unchanged)
 def predict_over_under_original(team1, team2, date, over_under_line, line_home, line_away):
     game_date = pd.to_datetime(date)
     recent_games_team1 = teams_df[(teams_df['team_name'] == team1) & (teams_df['GAME_DATE'] <= game_date)].sort_values('GAME_DATE', ascending=False).head(15)
