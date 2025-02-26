@@ -3,90 +3,250 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NBA Over/Under Predictor</title>
+    <title>Dinotinto's NBA Over/Under Predictor</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { background-color: #f8f9fa; font-family: 'Arial', sans-serif; padding-top: 20px; }
-        .container { max-width: 700px; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
-        h1 { color: #E03A3E; font-weight: bold; text-align: center; margin-bottom: 30px; }
-        .form-label { font-weight: 500; color: #262B3F; }
-        .btn-primary { background-color: #E03A3E; border: none; padding: 10px 20px; font-size: 1.1em; }
-        .btn-primary:hover { background-color: #C12F32; }
-        .result { margin-top: 30px; padding: 20px; background-color: #F5CD30; border-radius: 8px; text-align: left; }
-        .result h3 { margin: 10px 0; font-size: 1.2em; color: #262B3F; }
-        .spinner-border { color: #E03A3E; }
-        .form-select { padding-left: 30px; }
+        body {
+            background-image: url('/static/pic/20211126_200454.jpg'); /* Your local image */
+            background-size: auto 100%; /* Scales the image to fit the full height, maintaining aspect ratio */
+            background-position: top center; /* Positions the image from the top, centered horizontally */
+            background-repeat: no-repeat; /* Prevents tiling */
+            min-height: 100vh; /* Ensures the body takes up at least the full viewport height */
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            overflow-x: hidden; /* Hides horizontal overflow */
+        }
+        /* Fallback background if image fails */
+        body.no-image {
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .container {
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            margin-top: 20px;
+            transition: transform 0.3s ease;
+        }
+        .container:hover {
+            transform: translateY(-5px);
+        }
+
+        h1 {
+            color: #ffd700; /* Gold for a basketball vibe */
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+            font-size: 2.5rem;
+            margin-bottom: 30px;
+        }
+
+        .form-container {
+            margin-bottom: 30px;
+        }
+
+        .form-label {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .form-select, .form-control {
+            background-color: #fff;
+            color: #000;
+            border: 2px solid #ffd700;
+            border-radius: 8px;
+            padding: 10px;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .form-select:focus, .form-control:focus {
+            border-color: #b21f1f;
+            box-shadow: 0 0 10px rgba(178, 31, 31, 0.5);
+            outline: none;
+        }
+
+        .btn-primary {
+            background-color: #b21f1f;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1.1rem;
+            border-radius: 8px;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .btn-primary:hover {
+            background-color: #ffd700;
+            color: #000;
+            transform: scale(1.05);
+        }
+
+        .results-container {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+            padding: 20px;
+            border: 2px solid #ffd700;
+            border-radius: 10px;
+            background-color: rgba(255, 255, 255, 0.95);
+            color: #000;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .results-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+        }
+
+        h3 {
+            color: #b21f1f;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+            margin-bottom: 15px;
+        }
+
+        .list-group-item {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 5px;
+            padding: 12px;
+            transition: transform 0.2s ease, background-color 0.3s ease;
+        }
+        .list-group-item:hover {
+            transform: scale(1.02);
+        }
+
+        .over {
+            background-color: #d4edda; /* Light green */
+            color: #155724; /* Dark green text */
+        }
+        .under {
+            background-color: #f8d7da; /* Light red */
+            color: #721c24; /* Dark red text */
+        }
+        .push {
+            background-color: #fff3cd; /* Light yellow */
+            color: #856404; /* Dark yellow text */
+        }
+
+        .btn-secondary {
+            background-color: #4a90e2;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 8px;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .btn-secondary:hover {
+            background-color: #ffd700;
+            color: #000;
+            transform: scale(1.05);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+                margin-top: 10px;
+            }
+            h1 {
+                font-size: 2rem;
+            }
+            .form-select, .form-control, .btn-primary, .btn-secondary {
+                font-size: 0.9rem;
+                padding: 8px;
+            }
+            .results-container {
+                max-height: 300px;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1><i class="fas fa-basketball-ball me-2"></i>Dinotinto's NBA Over/Under Predictor</h1>
-        <form method="POST" id="predictForm">
-            <div class="mb-3">
-                <label for="home_team" class="form-label"><i class="fas fa-home me-1"></i> Home Team</label>
-                <select class="form-select" name="home_team" id="home_team" required>
-                    <option value="">Select Home Team</option>
-                    {% for team in teams %}
-                    <option value="{{ team }}">{{ team }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="mb-3">
-                <label for="away_team" class="form-label"><i class="fas fa-plane-departure me-1"></i> Away Team</label>
-                <select class="form-select" name="away_team" id="away_team" required>
-                    <option value="">Select Away Team</option>
-                    {% for team in teams %}
-                    <option value="{{ team }}">{{ team }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="mb-3">
-                <label for="date" class="form-label"><i class="fas fa-calendar-alt me-1"></i> Game Date</label>
-                <input type="date" class="form-control" name="date" id="date" required>
-            </div>
-            <div class="mb-3">
-                <label for="line" class="form-label"><i class="fas fa-chart-line me-1"></i> Overall Over/Under Line</label>
-                <input type="number" step="0.5" class="form-control" name="line" id="line" placeholder="e.g., 210.5" required>
-            </div>
-            <div class="mb-3">
-                <label for="line_home" class="form-label"><i class="fas fa-chart-line me-1"></i> Home Team Over/Under Line</label>
-                <input type="number" step="0.5" class="form-control" name="line_home" id="line_home" placeholder="e.g., 105.5" required>
-            </div>
-            <div class="mb-3">
-                <label for="line_away" class="form-label"><i class="fas fa-chart-line me-1"></i> Away Team Over/Under Line</label>
-                <input type="number" step="0.5" class="form-control" name="line_away" id="line_away" placeholder="e.g., 105.5" required>
-            </div>
-            <div class="d-grid">
-                <button type="submit" class="btn btn-primary"><i class="fas fa-play me-1"></i> Predict</button>
-            </div>
-        </form>
-        <div id="spinner" class="d-none text-center mt-3">
-            <div class="spinner-border" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Dinotinto's NBA Over/Under Predictor</h1>
+        
+        <!-- Form Container -->
+        <div class="form-container">
+            <form method="POST" action="/">
+                <div class="mb-3">
+                    <label for="home_team" class="form-label">Home Team</label>
+                    <select class="form-select" id="home_team" name="home_team" required>
+                        {% for team in teams %}
+                            <option value="{{ team }}" {% if form_data.home_team == team %}selected{% endif %}>{{ team }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="away_team" class="form-label">Away Team</label>
+                    <select class="form-select" id="away_team" name="away_team" required>
+                        {% for team in teams %}
+                            <option value="{{ team }}" {% if form_data.away_team == team %}selected{% endif %}>{{ team }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="date" class="form-label">Game Date</label>
+                    <input type="date" class="form-control" id="date" name="date" value="{{ form_data.date }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="line" class="form-label">Over/Under Line</label>
+                    <input type="number" step="0.1" class="form-control" id="line" name="line" value="{{ form_data.line }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="line_home" class="form-label">Home Team Line</label>
+                    <input type="number" step="0.1" class="form-control" id="line_home" name="line_home" value="{{ form_data.line_home }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="line_away" class="form-label">Away Team Line</label>
+                    <input type="number" step="0.1" class="form-control" id="line_away" name="line_away" value="{{ form_data.line_away }}" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Predict</button>
+            </form>
         </div>
+
+        <!-- Results Container -->
         {% if results %}
-        <div class="result">
-            {% if results.error %}
-            <h3 class="text-danger">{{ results.error }}</h3>
-            {% else %}
-            <h3><i class="fas fa-brain me-1"></i> {{ results.original_overall }}</h3>
-            <h3><i class="fas fa-basketball-ball me-1"></i> {{ results.points }}</h3>
-            <h3><i class="fas fa-home me-1"></i> {{ results.home_away }}</h3>
-            <h3><i class="fas fa-user me-1"></i> {{ results.original_team1 }}</h3>
-            <h3><i class="fas fa-user me-1"></i> {{ results.original_team2 }}</h3>
-            <h3><i class="fas fa-user me-1"></i> {{ results.team_based_team1 }}</h3>
-            <h3><i class="fas fa-user me-1"></i> {{ results.team_based_team2 }}</h3>
-            {% endif %}
-        </div>
+            <div class="results-container">
+                <h3>Prediction Results for {{ form_data.home_team }} vs. {{ form_data.away_team }}</h3>
+                {% if results.error %}
+                    <div class="alert alert-danger">{{ results.error }}</div>
+                {% else %}
+                    <ul class="list-group">
+                        {% for key, value in results.items() %}
+                            {% if 'Over' in value %}
+                                <li class="list-group-item over">{{ value }}</li>
+                            {% elif 'Under' in value %}
+                                <li class="list-group-item under">{{ value }}</li>
+                            {% elif 'Push' in value %}
+                                <li class="list-group-item push">{{ value }}</li>
+                            {% else %}
+                                <li class="list-group-item">{{ value }}</li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+                <a href="/" class="btn btn-secondary mt-3">Predict Another Match</a>
+            </div>
         {% endif %}
     </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.getElementById('predictForm').addEventListener('submit', function() {
-            document.getElementById('spinner').classList.remove('d-none');
-        });
+        // Check if background image loads, fallback to gradient
+        const body = document.body;
+        const img = new Image();
+        img.src = '/static/pic/20211126_200454.jpg';
+        img.onload = function() {
+            body.classList.remove('no-image');
+        };
+        img.onerror = function() {
+            body.classList.add('no-image');
+        };
     </script>
 </body>
 </html>

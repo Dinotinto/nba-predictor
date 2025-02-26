@@ -67,7 +67,7 @@ try:
     logger.info("Models loaded successfully: model_original, model_team_home, model_team_away")
 except Exception as e:
     logger.error(f"Failed to load pre-trained models: {str(e)}", exc_info=True)
-    raise  # Crash at startup if models can’t load
+    raise
 
 # Prediction functions (unchanged)
 def predict_over_under_original(team1, team2, date, over_under_line, line_home, line_away):
@@ -155,53 +155,70 @@ def home():
     logger.info("Handling request...")
     team_names = [team['full_name'] for team in teams.get_teams()]
     logger.info(f"Team names loaded: {len(team_names)} teams")
+    
+    # Initialize form data to preserve inputs
+    form_data = {
+        'home_team': '',
+        'away_team': '',
+        'date': '',
+        'line': '',
+        'line_home': '',
+        'line_away': ''
+    }
+    results = None
+    
     if request.method == 'POST':
         logger.info("Processing POST request")
-        team1 = request.form['home_team']
-        team2 = request.form['away_team']
-        date = request.form['date']
-        line = request.form['line']
-        line_home = request.form['line_home']
-        line_away = request.form['line_away']
-        logger.info(f"Form data: team1={team1}, team2={team2}, date={date}, line={line}, line_home={line_home}, line_away={line_away}")
+        # Capture form inputs
+        form_data['home_team'] = request.form['home_team']
+        form_data['away_team'] = request.form['away_team']
+        form_data['date'] = request.form['date']
+        form_data['line'] = request.form['line']
+        form_data['line_home'] = request.form['line_home']
+        form_data['line_away'] = request.form['line_away']
+        logger.info(f"Form data: {form_data}")
+        
         try:
             logger.info("Calling predict_over_under_original")
-            (overall_pred, total_pts1, overall_prob), (team1_orig_raw, team1_orig_final, team1_orig_prob, team1_avg_pts), (team2_orig_raw, team2_orig_final, team2_orig_prob, team2_avg_pts) = predict_over_under_original(team1, team2, date, line, line_home, line_away)
+            (overall_pred, total_pts1, overall_prob), (team1_orig_raw, team1_orig_final, team1_orig_prob, team1_avg_pts), (team2_orig_raw, team2_orig_final, team2_orig_prob, team2_avg_pts) = predict_over_under_original(form_data['home_team'], form_data['away_team'], form_data['date'], form_data['line'], form_data['line_home'], form_data['line_away'])
             logger.info("predict_over_under_original completed")
             
             logger.info("Calling predict_over_under_points")
-            pred2, total_pts2, conf2 = predict_over_under_points(team1, team2, date, line)
+            pred2, total_pts2, conf2 = predict_over_under_points(form_data['home_team'], form_data['away_team'], form_data['date'], form_data['line'])
             logger.info("predict_over_under_points completed")
             
             logger.info("Calling predict_over_under_last_5_home_away")
-            pred3, avg_pts_home, avg_pts_away, total_pts3, conf3 = predict_over_under_last_5_home_away(team1, team2, date, line, line_home, line_away)
+            pred3, avg_pts_home, avg_pts_away, total_pts3, conf3 = predict_over_under_last_5_home_away(form_data['home_team'], form_data['away_team'], form_data['date'], form_data['line'], form_data['line_home'], form_data['line_away'])
             logger.info("predict_over_under_last_5_home_away completed")
             
             logger.info("Calling predict_team_over_under for home team")
-            team1_team_raw, team1_team_final, team1_team_prob, team1_team_avg_pts = predict_team_over_under(team1, date, line_home, is_home_team=True)
+            team1_team_raw, team1_team_final, team1_team_prob, team1_team_avg_pts = predict_team_over_under(form_data['home_team'], form_data['date'], form_data['line_home'], is_home_team=True)
             logger.info("predict_team_over_under for home team completed")
             
             logger.info("Calling predict_team_over_under for away team")
-            team2_team_raw, team2_team_final, team2_team_prob, team2_team_avg_pts = predict_team_over_under(team2, date, line_away, is_home_team=False)
+            team2_team_raw, team2_team_final, team2_team_prob, team2_team_avg_pts = predict_team_over_under(form_data['away_team'], form_data['date'], form_data['line_away'], is_home_team=False)
             logger.info("predict_team_over_under for away team completed")
             
+            # Updated results format to match your specification
             results = {
-                'original_overall': f"Original Model ({team1} vs. {team2}): {overall_pred}, Total Points: {total_pts1:.2f}, Confidence: {overall_prob:.1f}%",
-                'points': f"Points-Based ({team1} vs. {team2}): {pred2}, Total Points: {total_pts2:.2f}, Confidence is {conf2:.1f}%",
-                'home_away': f"Home/Away ({team1} vs. {team2}): {pred3}, Home Avg: {avg_pts_home:.2f}, Away Avg: {avg_pts_away:.2f}, Total: {total_pts3:.2f}, Confidence is {conf3:.1f}%",
-                'original_team1': f"Original Model ({team1}): {team1} - {line_home}, Raw: {team1_orig_raw}, Final: {team1_orig_final}, Confidence is {team1_orig_prob:.1f}%, Avg Points: {team1_avg_pts:.2f}",
-                'original_team2': f"Original Model ({team2}): {team2} - {line_away}, Raw: {team2_orig_raw}, Final: {team2_orig_final}, Confidence is {team2_orig_prob:.1f}%, Avg Points: {team2_avg_pts:.2f}",
-                'team_based_team1': f"Team-Based Model ({team1}): {team1} - {line_home}, Raw: {team1_team_raw}, Final: {team1_team_final}, Confidence is {team1_team_prob:.1f}%, Avg Points: {team1_team_avg_pts:.2f}",
-                'team_based_team2': f"Team-Based Model ({team2}): {team2} - {line_away}, Raw: {team2_team_raw}, Final: {team2_team_final}, Confidence is {team2_team_prob:.1f}%, Avg Points: {team2_team_avg_pts:.2f}"
+                'original_overall': f"Original Model ({form_data['home_team']} vs. {form_data['away_team']}): {overall_pred}, Total Points predicted: {total_pts1:.2f}, Confidence: {overall_prob:.1f}%",
+                'points': f"Points-Based ({form_data['home_team']} vs. {form_data['away_team']}): {pred2}, Total Points predicted: {total_pts2:.2f}, Confidence is {conf2:.1f}%",
+                'home_away': f"Home/Away ({form_data['home_team']} vs. {form_data['away_team']}): {pred3}, Total predicted: {total_pts3:.2f}, Confidence is {conf3:.1f}%    Home Avg: {avg_pts_home:.2f}, Away Avg: {avg_pts_away:.2f}",
+                'original_team1': f"Original Model ({form_data['home_team']}): {form_data['home_team']} Total Points predicted- {form_data['line_home']}, Model prediction: {team1_orig_raw}, Final: {team1_orig_final}, Confidence in model {team1_orig_prob:.1f}%, Avg Points: {team1_avg_pts:.2f}",
+                'original_team2': f"Original Model ({form_data['away_team']}): {form_data['away_team']} Total Points predicted- {form_data['line_away']}, Model prediction: {team2_orig_raw}, Final: {team2_orig_final}, Confidence in model {team2_orig_prob:.1f}%, Avg Points: {team2_avg_pts:.2f}",
+                'team_based_team1': f"Team-Based Model ({form_data['home_team']}): {form_data['home_team']} Total Points predicted- {form_data['line_home']}, Model prediction: {team1_team_raw}, Final: {team1_team_final}, Confidence in model {team1_team_prob:.1f}%, Avg Points: {team1_team_avg_pts:.2f}",
+                'team_based_team2': f"Team-Based Model ({form_data['away_team']}): {form_data['away_team']} Total Points predicted- {form_data['line_away']}, Model prediction: {team2_team_raw}, Final: {team2_team_final}, Confidence in model {team2_team_prob:.1f}%, Avg Points: {team2_team_avg_pts:.2f}"
             }
             logger.info("Prediction completed successfully")
         except Exception as e:
             logger.error(f"Error during prediction: {str(e)}", exc_info=True)
             results = {'error': f"Error: {str(e)}"}
-        return render_template('index.html', teams=team_names, results=results)
+        
+        return render_template('index.html', teams=team_names, form_data=form_data, results=results)
+    
     logger.info("Rendering GET request")
     try:
-        return render_template('index.html', teams=team_names, results=None)
+        return render_template('index.html', teams=team_names, form_data=form_data, results=None)
     except Exception as e:
         logger.error(f"Error rendering template: {str(e)}", exc_info=True)
         return f"Error: {str(e)}", 500
