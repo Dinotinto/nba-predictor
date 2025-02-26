@@ -1,17 +1,41 @@
 from flask import Flask, request, render_template
 from nba_api.stats.static import teams
+from nba_api.stats.endpoints import teamgamelog
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import accuracy_score
 from scipy.stats import norm
 import numpy as np
+import logging
+import os
 
-app = Flask(__name__)
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__, template_folder='templates')
+logger.info("Starting Flask app...")
 
 # Load and preprocess the new CSV
 def load_data():
-    df = pd.read_csv('nba_game_data_api_robust.csv')  # Adjust to your CSV name
+    logger.info("Loading data...")
+    try:
+        df = pd.read_csv('nba_game_data_api_robust.csv')
+        logger.info("CSV loaded successfully")
+    except FileNotFoundError:
+        logger.warning("CSV not found, fetching from NBA API")
+        nba_teams = teams.get_teams()
+        all_teams_data = pd.DataFrame()
+        for team in nba_teams:
+            try:
+                game_finder = teamgamelog.TeamGameLog(team_id=team['id'], season="2024-25").get_data_frames()[0]
+                game_finder['team_name'] = team['full_name']
+                game_finder['season'] = "2024-25"
+                all_teams_data = pd.concat([all_teams_data, game_finder], ignore_index=True)
+            except Exception as e:
+                logger.error(f"Error fetching data for {team['full_name']}: {e}")
+        df = all_teams_data
     df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'], format='%b %d, %Y', errors='coerce')
     median_pts = df['PTS'].median()
     df['OVER_UNDER'] = df['PTS'].apply(lambda x: 'Over' if x > median_pts else 'Under')
@@ -20,6 +44,7 @@ def load_data():
     opponent_stats = df.groupby('team_name')[['DREB', 'BLK', 'STL', 'PF']].mean().reset_index()
     opponent_stats.columns = ['OPPONENT', 'OPP_DREB', 'OPP_BLK', 'OPP_STL', 'OPP_PF']
     df = df.merge(opponent_stats, on='OPPONENT', how='left')
+    logger.info("Data preprocessing complete")
     return df
 
 # Load data once
@@ -39,8 +64,8 @@ param_grid = {'n_estimators': [100, 300, 500], 'max_depth': [10, 20, None]}
 grid_search_original = GridSearchCV(RandomForestClassifier(random_state=42), param_grid, cv=5, n_jobs=-1)
 grid_search_original.fit(X_train, y_train)
 model_original = grid_search_original.best_estimator_
-print(f"Original Model - Best params: {grid_search_original.best_params_}")
-print(f"Original Model - Accuracy: {accuracy_score(y_test, model_original.predict(X_test)):.2f}")
+logger.info(f"Original Model - Best params: {grid_search_original.best_params_}")
+logger.info(f"Original Model - Accuracy: {accuracy_score(y_test, model_original.predict(X_test)):.2f}")
 
 # Train Team-Based Model for Home Games
 X_home = home_df[features]
@@ -49,18 +74,18 @@ X_home_train, X_home_test, y_home_train, y_home_test = train_test_split(X_home, 
 grid_search_team_home = GridSearchCV(RandomForestClassifier(random_state=42), param_grid, cv=5, n_jobs=-1)
 grid_search_team_home.fit(X_home_train, y_home_train)
 model_team_home = grid_search_team_home.best_estimator_
-print(f"Team-Based Model (Home) - Best params: {grid_search_team_home.best_params_}")
-print(f"Team-Based Model (Home) - Accuracy: {accuracy_score(y_home_test, model_team_home.predict(X_home_test)):.2f}")
+logger.info(f"Team-Based Model (Home) - Best params: {grid_search_team_home.best_params_}")
+logger.info(f"Team-Based Model (Home) - Accuracy: {accuracy_score(y_home_test, model_team_home.predict(X_home_test)):.2f}")
 
 # Train Team-Based Model for Away Games
 X_away = away_df[features]
 y_away = away_df['OVER_UNDER']
 X_away_train, X_away_test, y_away_train, y_away_test = train_test_split(X_away, y_away, test_size=0.2, random_state=42)
 grid_search_team_away = GridSearchCV(RandomForestClassifier(random_state=42), param_grid, cv=5, n_jobs=-1)
-grid_search_team_away.fit(X_away_train, y_away_train)  # Fixed: y_away_test -> y_away_train
+grid_search_team_away.fit(X_away_train, y_away_train)
 model_team_away = grid_search_team_away.best_estimator_
-print(f"Team-Based Model (Away) - Best params: {grid_search_team_away.best_params_}")
-print(f"Team-Based Model (Away) - Accuracy: {accuracy_score(y_away_test, model_team_away.predict(X_away_test)):.2f}")
+logger.info(f"Team-Based Model (Away) - Best params: {grid_search_team_away.best_params_}")
+logger.info(f"Team-Based Model (Away) - Accuracy: {accuracy_score(y_away_test, model_team_away.predict(X_away_test)):.2f}")
 
 # Prediction 1: Original Model (overall and individual predictions)
 def predict_over_under_original(team1, team2, date, over_under_line, line_home, line_away):
@@ -175,10 +200,13 @@ def home():
                 'team_based_team1': f"Team-Based Model ({team1}): {team1} - {line_home}, Raw: {team1_team_raw}, Final: {team1_team_final}, Confidence is {team1_team_prob:.1f}%, Avg Points: {team1_team_avg_pts:.2f}",
                 'team_based_team2': f"Team-Based Model ({team2}): {team2} - {line_away}, Raw: {team2_team_raw}, Final: {team2_team_final}, Confidence is {team2_team_prob:.1f}%, Avg Points: {team2_team_avg_pts:.2f}"
             }
+            logger.info("Prediction completed successfully")
         except Exception as e:
+            logger.error(f"Error during prediction: {str(e)}")
             results = {'error': f"Error: {str(e)}"}
         return render_template('index.html', teams=team_names, results=results)
     return render_template('index.html', teams=team_names, results=None)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.getenv("PORT", 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
